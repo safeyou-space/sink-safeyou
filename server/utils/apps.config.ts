@@ -35,7 +35,7 @@ export const APP_CONFIGS: MultiAppConfig = {
     production: {
       iosAppId: '1491665304',
       iosUrlScheme: 'com.eif.safeyou',
-      iosUniversalLink: 'https://safeyou.page.link',
+      // iosUniversalLink: 'https://safeyou.page.link',
       androidPackageName: 'fambox.pro',
       androidAppName: 'Safe YOU',
       androidUrlScheme: 'https',
@@ -50,7 +50,7 @@ export const APP_CONFIGS: MultiAppConfig = {
     staging: {
       iosAppId: '1491665304',
       iosUrlScheme: 'com.eif.safeyou.qa',
-      iosUniversalLink: 'https://safeyou.page.link',
+      // iosUniversalLink: 'https://safeyou.page.link',
       androidPackageName: 'fambox.pro',
       androidAppName: 'Safe YOU',
       androidUrlScheme: 'https',
@@ -65,7 +65,7 @@ export const APP_CONFIGS: MultiAppConfig = {
     development: {
       iosAppId: '1491665304',
       iosUrlScheme: 'com.eif.safeyou.dev',
-      iosUniversalLink: 'https://safeyou.page.link',
+      // iosUniversalLink: 'https://safeyou.page.link',
       androidPackageName: 'fambox.pro',
       androidAppName: 'Safe YOU',
       androidUrlScheme: 'https',
@@ -362,15 +362,15 @@ export function detectEnvironmentFromHost(host: string, appId?: string): string 
   }
 
   // Generic patterns
-  if (host.includes('localhost') || host.includes('127.0.0.1') || host.includes('.local')) {
-    return 'development'
-  }
-  if (host.includes('staging') || host.includes('qa') || host.includes('test')) {
-    return 'staging'
-  }
-  if (host.includes('dev') || host.includes('development')) {
-    return 'development'
-  }
+  // if (host.includes('localhost') || host.includes('127.0.0.1') || host.includes('.local')) {
+  //   return 'development'
+  // }
+  // if (host.includes('staging') || host.includes('qa') || host.includes('test')) {
+  //   return 'staging'
+  // }
+  // if (host.includes('dev') || host.includes('development')) {
+  //   return 'development'
+  // }
 
   return 'production'
 }
@@ -406,7 +406,6 @@ export function getConfigForRequest(requestHost: string, linkAppId?: string): {
   appId: string
   environment: string
 } {
-  // Use link's app ID if provided, otherwise detect from host
   const appId = linkAppId || detectAppFromHost(requestHost)
   const environment = detectEnvironmentFromHost(requestHost, appId)
   const config = getAppConfig(appId, environment)
@@ -439,31 +438,32 @@ export function getEnvironmentBadge(host: string, appId?: string): string {
   }
 }
 
-// export function getAppDetectionPatterns(appId: string): RegExp[] {
-//   return APP_DETECTION_PATTERNS[appId] || []
-// }
-//
-// export function getAllApps(): string[] {
-//   return Object.keys(APP_CONFIGS)
-// }
+export function getAppDetectionPatterns(appId: string): RegExp[] {
+  return APP_DETECTION_PATTERNS[appId] || []
+}
 
-// export function getAppEnvironments(appId: string): string[] {
-//   const appConfig = APP_CONFIGS[appId]
-//   if (!appConfig) return []
-//   return Object.keys(appConfig)
-// }
-//
-// export function addAppConfig(appId: string, config: AppEnvironmentConfig): void {
-//   APP_CONFIGS[appId] = config
-// }
-//
-// export function addHostMapping(host: string, appId: string): void {
-//   HOST_TO_APP_MAP[host] = appId
-// }
-//
-// export function addAppDetectionPattern(appId: string, patterns: RegExp[]): void {
-//   APP_DETECTION_PATTERNS[appId] = patterns
-// }
-// export function getSafeYouConfig(environment: string): AppConfig {
-//   return getAppConfig('safeyou', environment)
-// }
+export function getAllApps(): string[] {
+  return Object.keys(APP_CONFIGS)
+}
+
+export function getAppEnvironments(appId: string): string[] {
+  const appConfig = APP_CONFIGS[appId]
+  if (!appConfig)
+    return []
+  return Object.keys(appConfig)
+}
+
+export function addAppConfig(appId: string, config: AppEnvironmentConfig): void {
+  APP_CONFIGS[appId] = config
+}
+
+export function addHostMapping(host: string, appId: string): void {
+  HOST_TO_APP_MAP[host] = appId
+}
+
+export function addAppDetectionPattern(appId: string, patterns: RegExp[]): void {
+  APP_DETECTION_PATTERNS[appId] = patterns
+}
+export function getSafeYouConfig(environment: string): AppConfig {
+  return getAppConfig('safeyou', environment)
+}
