@@ -21,8 +21,6 @@ export interface AppEnvironmentConfig {
 }
 
 export type MultiAppConfig = Record<string, AppEnvironmentConfig>
-
-// Default fallback configuration
 const DEFAULT_CONFIG: AppConfig = {
   webUrl: 'https://example.com',
   name: 'Default App',
@@ -78,109 +76,26 @@ export const APP_CONFIGS: MultiAppConfig = {
       themeColor: '#059669',
     },
   },
-  youtube: {
-    production: {
-      iosAppId: '544007664',
-      iosUrlScheme: 'youtube',
-      iosUniversalLink: 'https://www.youtube.com',
-      androidPackageName: 'com.google.android.youtube',
-      androidAppName: 'YouTube',
-      androidUrlScheme: 'https',
-      androidHost: 'www.youtube.com',
-      webUrl: 'https://www.youtube.com',
-      name: 'YouTube',
-      displayName: 'YouTube',
-      logo: '📺',
-      description: 'YouTube video streaming application',
-      themeColor: '#ff0000',
-    },
-  },
-  facebook: {
-    production: {
-      iosAppId: '284882215',
-      iosUrlScheme: 'fb',
-      iosUniversalLink: 'https://www.facebook.com',
-      androidPackageName: 'com.facebook.katana',
-      androidAppName: 'Facebook',
-      androidUrlScheme: 'https',
-      androidHost: 'www.facebook.com',
-      webUrl: 'https://www.facebook.com',
-      name: 'Facebook',
-      displayName: 'Facebook',
-      logo: '📘',
-      description: 'Facebook social media application',
-      themeColor: '#1877f2',
-    },
-  },
-  whatsapp: {
-    production: {
-      iosAppId: '310633997',
-      iosUrlScheme: 'whatsapp',
-      androidPackageName: 'com.whatsapp',
-      androidAppName: 'WhatsApp',
-      androidUrlScheme: 'whatsapp',
-      webUrl: 'https://web.whatsapp.com',
-      name: 'WhatsApp',
-      displayName: 'WhatsApp',
-      logo: '💬',
-      description: 'WhatsApp messaging application',
-      themeColor: '#25d366',
-    },
-  },
-  spotify: {
-    production: {
-      iosAppId: '324684580',
-      iosUrlScheme: 'spotify',
-      androidPackageName: 'com.spotify.music',
-      androidAppName: 'Spotify',
-      androidUrlScheme: 'spotify',
-      webUrl: 'https://open.spotify.com',
-      name: 'Spotify',
-      displayName: 'Spotify',
-      logo: '🎵',
-      description: 'Spotify music streaming application',
-      themeColor: '#1db954',
-    },
-  },
 }
 
 export const HOST_TO_APP_MAP: Record<string, string> = {
-  // SafeYou domains
   'safeyou.space': 'safeyou',
   'qa.safeyou.space': 'safeyou',
   'dev.safeyou.space': 'safeyou',
   'safeyou.page.link': 'safeyou',
 
-  // Other app domains
-  'web.whatsapp.com': 'whatsapp',
-  'wa.me': 'whatsapp',
-  'open.spotify.com': 'spotify',
-  'spotify.link': 'spotify',
-  'www.youtube.com': 'youtube',
-  'youtu.be': 'youtube',
-  'm.youtube.com': 'youtube',
-
-  // Localhost mappings - more flexible patterns
-  'localhost': 'safeyou', // Will match any localhost
+  'localhost': 'safeyou',
   '127.0.0.1': 'safeyou',
-  'whatsapp.localhost': 'whatsapp',
-  'spotify.localhost': 'spotify',
-  'youtube.localhost': 'youtube',
 }
 
-// App-specific patterns for detecting if already inside the app
 export const APP_DETECTION_PATTERNS: Record<string, RegExp[]> = {
   safeyou: [/SafeYou/i, /SafeYOU/i, /fambox/i],
-  whatsapp: [/WhatsApp/i],
-  spotify: [/Spotify/i],
-  youtube: [/YouTube/i, /YoutubeMobile/i],
 }
 
 export function detectAppFromHost(host: string): string {
   console.log(`[APP_DETECTION] Analyzing host: ${host}`)
   const normalizedHost = host.toLowerCase()
 
-  // Direct host mapping first
   for (const [hostPattern, appId] of Object.entries(HOST_TO_APP_MAP)) {
     if (normalizedHost === hostPattern.toLowerCase()
       || normalizedHost.includes(hostPattern.toLowerCase())) {
@@ -189,67 +104,21 @@ export function detectAppFromHost(host: string): string {
     }
   }
 
-  // Pattern-based detection
-  if (normalizedHost.includes('whatsapp'))
-    return 'whatsapp'
-  if (normalizedHost.includes('spotify'))
-    return 'spotify'
-  if (normalizedHost.includes('youtube'))
-    return 'youtube'
-  if (normalizedHost.includes('facebook'))
-    return 'facebook'
-
-  // SafeYou detection (should be more specific)
   if (normalizedHost.includes('safeyou') || normalizedHost.includes('page.link')) {
     console.log(`[APP_DETECTION] SafeYou domain detected: ${host}`)
     return 'safeyou'
   }
 
-  // Default to SafeYou for localhost and unknown domains
   console.log(`[APP_DETECTION] No specific app detected for host: ${host}, defaulting to safeyou`)
-  return 'safeyou' // Changed back to 'safeyou' as default
+  return 'safeyou'
 }
 
 export function detectAppFromUrl(url: string): string {
   if (!url)
-    return 'safeyou' // Default fallback
+    return 'safeyou'
 
   const normalizedUrl = url.toLowerCase()
   console.log(`[URL_DETECTION] Analyzing URL: ${normalizedUrl}`)
-
-  // YouTube URL patterns (most specific first)
-  if (normalizedUrl.includes('youtube.com/')
-    || normalizedUrl.includes('youtu.be/')
-    || normalizedUrl.includes('m.youtube.com/')) {
-    console.log(`[URL_DETECTION] YouTube URL detected`)
-    return 'youtube'
-  }
-
-  // Facebook URL patterns
-  if (normalizedUrl.includes('facebook.com/')
-    || normalizedUrl.includes('fb.me/')
-    || normalizedUrl.includes('m.facebook.com/')) {
-    console.log(`[URL_DETECTION] Facebook URL detected`)
-    return 'facebook'
-  }
-
-  // WhatsApp URL patterns
-  if (normalizedUrl.includes('wa.me/')
-    || normalizedUrl.includes('api.whatsapp.com/')
-    || normalizedUrl.includes('web.whatsapp.com/')
-    || normalizedUrl.includes('chat.whatsapp.com/')) {
-    console.log(`[URL_DETECTION] WhatsApp URL detected`)
-    return 'whatsapp'
-  }
-
-  // Spotify URL patterns
-  if (normalizedUrl.includes('open.spotify.com/')
-    || normalizedUrl.includes('spotify.com/')) {
-    console.log(`[URL_DETECTION] Spotify URL detected`)
-    return 'spotify'
-  }
-
-  // SafeYou URL patterns
   if (normalizedUrl.includes('safeyou.space/')
     || normalizedUrl.includes('safeyou.page.link/')
     || normalizedUrl.includes('fambox.pro')) {
@@ -257,7 +126,7 @@ export function detectAppFromUrl(url: string): string {
     return 'safeyou'
   }
 
-  return 'safeyou' // Default fallback
+  return 'safeyou'
 }
 
 export function getConfigForLink(link: any, requestHost: string): AppConfig {
@@ -267,15 +136,12 @@ export function getConfigForLink(link: any, requestHost: string): AppConfig {
     linkApp: link?.app,
   })
 
-  // Priority 1: Explicit app in link
   if (link?.app && APP_CONFIGS[link.app]) {
     const environment = detectEnvironmentFromHost(requestHost, link.app)
     const config = getAppConfig(link.app, environment)
     console.log(`[CONFIG] Using explicit link app: ${link.app}`)
     return config
   }
-
-  // Priority 2: Detect from target URL
   if (link?.url) {
     const appFromUrl = detectAppFromUrl(link.url)
     const environment = detectEnvironmentFromHost(requestHost, appFromUrl)
@@ -284,7 +150,6 @@ export function getConfigForLink(link: any, requestHost: string): AppConfig {
     return config
   }
 
-  // Priority 3: Detect from host
   const appFromHost = detectAppFromHost(requestHost)
   const environment = detectEnvironmentFromHost(requestHost, appFromHost)
   const config = getAppConfig(appFromHost, environment)

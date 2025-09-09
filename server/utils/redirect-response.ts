@@ -340,8 +340,11 @@ function generateRedirectScript(config: SmartLinkOptions, device: DeviceInfo, co
   let appLaunchAttempted = false;
   let appOpenDetected = false;
   let isIOS = CONFIG.device.isIOS;
+  let isAndroid = CONFIG.device.isAndroid;
   let startTime = Date.now();
   let fallbackTimer = null;
+  let appLaunchTimer = null;
+  let storeRedirectTimer = null;
 
   function log(msg) {
     if (typeof console !== 'undefined' && console.log) {
@@ -349,6 +352,16 @@ function generateRedirectScript(config: SmartLinkOptions, device: DeviceInfo, co
     }
   }
   
+  function closeWindow() {
+    try {
+      if (window.opener) {
+        window.close();
+      }
+    } catch (e) {
+      log('Cannot close window: ' + e.message);
+    }
+  }
+
   function redirectToAppStore() {
     if (redirected) return false;
     
@@ -357,12 +370,14 @@ function generateRedirectScript(config: SmartLinkOptions, device: DeviceInfo, co
       redirected = true;
       const appStoreUrl = 'https://apps.apple.com/app/id' + CONFIG.app.iosAppId;
       window.location.href = appStoreUrl;
+      setTimeout(closeWindow, 1000);
       return true;
-    } else if (CONFIG.device.isAndroid && CONFIG.app.androidPackage) {
+    } else if (isAndroid && CONFIG.app.androidPackage) {
       log('Redirecting to Play Store for Android');
       redirected = true;
       const playStoreUrl = 'https://play.google.com/store/apps/details?id=' + CONFIG.app.androidPackage;
       window.location.href = playStoreUrl;
+      setTimeout(closeWindow, 1000);
       return true;
     }
     
@@ -392,17 +407,23 @@ function generateRedirectScript(config: SmartLinkOptions, device: DeviceInfo, co
     if (fallback) fallback.style.display = 'block';
   }
 
-  function clearFallbackTimer() {
+  function clearAllTimers() {
     if (fallbackTimer) {
       clearTimeout(fallbackTimer);
       fallbackTimer = null;
+    }
+    if (appLaunchTimer) {
+      clearTimeout(appLaunchTimer);
+      appLaunchTimer = null;
+    }
+    if (storeRedirectTimer) {
+      clearTimeout(storeRedirectTimer);
+      storeRedirectTimer = null;
     }
   }
 
   function buildIOSSchemeUrl(baseScheme, targetUrl, env) {
     if (!baseScheme) return null;
-    
-    // Ensure scheme format is correct
     const scheme = baseScheme.replace(/:\\/\\/$/, '');
     return scheme + '://open?url=' + encodeURIComponent(targetUrl);
   }
@@ -414,38 +435,31 @@ function generateRedirectScript(config: SmartLinkOptions, device: DeviceInfo, co
       if (detectionActive && !appOpenDetected) {
         appOpenDetected = true;
         detectionActive = false;
-        clearFallbackTimer();
+        clearAllTimers();
         log('iOS app opened detected via: ' + source);
+        setTimeout(closeWindow, 500);
       }
     };
 
-    // Primary detection method - page visibility
     const visibilityHandler = () => {
       if (document.hidden && detectionActive) {
         detectAppOpen('visibilitychange');
       }
     };
 
-    // Secondary detection method - window blur
     const blurHandler = () => {
       if (detectionActive) {
         detectAppOpen('blur');
       }
     };
 
-    // Cleanup detection when page regains focus
     const focusHandler = () => {
       if (!appOpenDetected && detectionActive) {
         const timeDiff = Date.now() - startTime;
-        log('Focus returned after ' + timeDiff + 'ms - app likely not opened');
-        
-        // If focus returns quickly, app probably didn't open
         if (timeDiff < 1000) {
           detectionActive = false;
-          // Trigger fallback after short delay
           setTimeout(() => {
             if (!redirected) {
-              log('Quick focus return detected - showing App Store option');
               redirectToAppStore();
             }
           }, 100);
@@ -453,7 +467,6 @@ function generateRedirectScript(config: SmartLinkOptions, device: DeviceInfo, co
       }
     };
 
-    // Page hide detection
     const pagehideHandler = () => {
       if (detectionActive) {
         detectAppOpen('pagehide');
@@ -465,7 +478,86 @@ function generateRedirectScript(config: SmartLinkOptions, device: DeviceInfo, co
     window.addEventListener('focus', focusHandler);
     window.addEventListener('pagehide', pagehideHandler);
     
-    // Cleanup function
+    return () => {
+      detectionActive = false;
+      document.removeEventListener('visibilitychange', visibilityHandler);
+      window.removeEventListener('blur', blurHandler);
+      window.removeEventListener('focus', focusHandler);
+      window.removeEventListener('pagehide', pagehideHandler);
+    };
+  }
+
+  function setupAndroidAppDetection() {
+    let detectionActive = true;
+    let detectionStartTime = Date.now();
+    
+    const detectAppOpen = (source) => {
+      if (detectionActive && !appOpenDetected) {
+        appOpenDetected = true;
+        detectionActive = false;
+        clearAllTimers();
+        log('Android app opened detected via: ' + source);
+        setTimeout(closeWindow, 500);
+      }
+    };
+
+    const visibilityHandler = () => {
+      if (document.hidden && detectionActive) {
+        // Only detect if enough time has passed (app launch takes some time)
+        const timeDiff = Date.now() - detectionStartTime;
+        if (timeDiff > 300) {
+          detectAppOpen('visibilitychange');
+        }
+      }
+    };
+
+    const blurHandler = () => {
+      if (detectionActive) {
+        const timeDiff = Date.now() - detectionStartTime;
+        if (timeDiff > 300) {
+          detectAppOpen('blur');
+        }
+      }
+    };
+
+    const focusHandler = () => {
+      if (!appOpenDetected && detectionActive) {
+        const timeDiff = Date.now() - detectionStartTime;
+        // If focus returns quickly, likely the app didn't open
+        if (timeDiff < 2000 && timeDiff > 100) {
+          log('Focus returned quickly - app likely not installed');
+          detectionActive = false;
+          setTimeout(() => {
+            if (!redirected) {
+              redirectToAppStore();
+            }
+          }, 100);
+        }
+      }
+    };
+
+    const pagehideHandler = () => {
+      if (detectionActive) {
+        const timeDiff = Date.now() - detectionStartTime;
+        if (timeDiff > 300) {
+          detectAppOpen('pagehide');
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', visibilityHandler);
+    window.addEventListener('blur', blurHandler);
+    window.addEventListener('focus', focusHandler);
+    window.addEventListener('pagehide', pagehideHandler);
+    
+    setTimeout(() => {
+      if (detectionActive && !appOpenDetected && !redirected) {
+        detectionActive = false;
+        log('Android app detection timeout - redirecting to Play Store');
+        redirectToAppStore();
+      }
+    }, 3000);
+    
     return () => {
       detectionActive = false;
       document.removeEventListener('visibilitychange', visibilityHandler);
@@ -479,50 +571,26 @@ function generateRedirectScript(config: SmartLinkOptions, device: DeviceInfo, co
     if (redirected || appLaunchAttempted) return;
     appLaunchAttempted = true;
 
-    log('Attempting app launch for ' + CONFIG.appName);
-
     let cleanupDetection = null;
     
-    // Setup detection for iOS
     if (isIOS) {
       cleanupDetection = setupIOSAppDetection();
       startTime = Date.now();
-    }
-
-    if (isIOS) {
-      log('iOS device detected, launching app');
 
       let schemeUrl = null;
-      
-      if (CONFIG.appName === 'youtube' && CONFIG.app.iosAppId) {
-        const videoId = extractYouTubeVideoId(CONFIG.target);
-        if (videoId) {
-          schemeUrl = 'youtube://watch?v=' + videoId;
-        }
-      } else if (CONFIG.appName === 'facebook' && CONFIG.app.iosAppId) {
-        schemeUrl = 'fb://facewebmodal/f?href=' + encodeURIComponent(CONFIG.target);
-      } else if (CONFIG.appName === 'whatsapp' && CONFIG.app.iosAppId) {
-        schemeUrl = convertToWhatsAppScheme(CONFIG.target);
-      } else if (CONFIG.appName === 'spotify' && CONFIG.app.iosAppId) {
-        schemeUrl = convertToSpotifyScheme(CONFIG.target);
-      } else if (CONFIG.appName === 'safeyou' || !CONFIG.appName) {
-        // Use the passed iOS scheme URL for SafeYou or generic apps
+      if (CONFIG.appName === 'safeyou' || !CONFIG.appName) {
         schemeUrl = buildIOSSchemeUrl(CONFIG.app.iosScheme, CONFIG.target, CONFIG.environment);
       }
 
       if (schemeUrl) {
         try {
           window.location.href = schemeUrl;
-          setTimeout(() => {
-            window.close()
-          }, 3000)
         } catch (error) {
           if (cleanupDetection) cleanupDetection();
           redirectToAppStore();
           return;
         }
 
-        // Set fallback timer for iOS
         fallbackTimer = setTimeout(() => {
           if (!appOpenDetected && !redirected) {
             log('iOS app detection timeout - redirecting to App Store');
@@ -532,113 +600,54 @@ function generateRedirectScript(config: SmartLinkOptions, device: DeviceInfo, co
         }, CONFIG.timeouts.IOS_APP_DETECTION);
 
       } else {
-        log('No scheme URL available for iOS app');
         if (cleanupDetection) cleanupDetection();
         redirectToAppStore();
       }
 
-    } else if (CONFIG.device.isAndroid) {
-      log('Android device detected, launching app');
-
+    } else if (isAndroid) {
+      cleanupDetection = setupAndroidAppDetection();
+      
       let intentUrl = null;
 
-      if (CONFIG.appName === 'youtube' && CONFIG.app.androidPackage) {
-        intentUrl = 'intent://' + CONFIG.target.replace('https://www.youtube.com/', 'www.youtube.com/') + '#Intent;' +
-          'scheme=https;' +
-          'package=' + CONFIG.app.androidPackage + ';' +
-          'action=android.intent.action.VIEW;' +
-          'category=android.intent.category.BROWSABLE;' +
-          'S.browser_fallback_url=' + encodeURIComponent('https://play.google.com/store/apps/details?id=' + CONFIG.app.androidPackage) + ';' +
-          'end';
-      } else if (CONFIG.appName === 'facebook' && CONFIG.app.androidPackage) {
-        intentUrl = 'intent://' + CONFIG.target.replace('https://www.facebook.com/', 'www.facebook.com/') + '#Intent;' +
-          'scheme=https;' +
-          'package=' + CONFIG.app.androidPackage + ';' +
-          'action=android.intent.action.VIEW;' +
-          'category=android.intent.category.BROWSABLE;' +
-          'S.browser_fallback_url=' + encodeURIComponent('https://play.google.com/store/apps/details?id=' + CONFIG.app.androidPackage) + ';' +
-          'end';
-      } else if (CONFIG.appName === 'whatsapp' && CONFIG.app.androidPackage) {
-        intentUrl = 'intent://send/#Intent;' +
-          'scheme=whatsapp;' +
-          'package=' + CONFIG.app.androidPackage + ';' +
-          'action=android.intent.action.SEND;' +
-          'S.browser_fallback_url=' + encodeURIComponent('https://play.google.com/store/apps/details?id=' + CONFIG.app.androidPackage) + ';' +
-          'end';
-      } else if (CONFIG.appName === 'spotify' && CONFIG.app.androidPackage) {
-        intentUrl = 'intent://' + CONFIG.target.replace('https://open.spotify.com/', 'open.spotify.com/') + '#Intent;' +
-          'scheme=https;' +
-          'package=' + CONFIG.app.androidPackage + ';' +
-          'action=android.intent.action.VIEW;' +
-          'category=android.intent.category.BROWSABLE;' +
-          'S.browser_fallback_url=' + encodeURIComponent('https://play.google.com/store/apps/details?id=' + CONFIG.app.androidPackage) + ';' +
-          'end';
-      } else if ((CONFIG.appName === 'safeyou' || !CONFIG.appName) && CONFIG.app.androidPackage) {
+      if ((CONFIG.appName === 'safeyou' || !CONFIG.appName) && CONFIG.app.androidPackage) {
         const androidScheme = CONFIG.app.androidScheme || 'https';
         const androidHost = CONFIG.app.androidHost || 'open';
         
-        if (androidScheme === 'https') {
-          intentUrl = 'intent://' + androidHost + '?url=' + encodeURIComponent(CONFIG.target) + '&env=' + CONFIG.environment + '#Intent;' +
-            'scheme=' + androidScheme + ';' +
-            'package=' + CONFIG.app.androidPackage + ';' +
-            'action=android.intent.action.VIEW;' +
-            'category=android.intent.category.BROWSABLE;' +
-            'S.browser_fallback_url=' + encodeURIComponent('https://play.google.com/store/apps/details?id=' + CONFIG.app.androidPackage) + ';' +
-            'end';
-        } else {
-          intentUrl = 'intent://' + androidHost + '?url=' + encodeURIComponent(CONFIG.target) + '&env=' + CONFIG.environment + '#Intent;' +
-            'scheme=' + androidScheme + ';' +
-            'package=' + CONFIG.app.androidPackage + ';' +
-            'action=android.intent.action.VIEW;' +
-            'S.browser_fallback_url=' + encodeURIComponent('https://play.google.com/store/apps/details?id=' + CONFIG.app.androidPackage) + ';' +
-            'end';
+        // Build proper intent URL
+        const intentParams = [
+          'scheme=' + androidScheme,
+          'package=' + CONFIG.app.androidPackage,
+          'action=android.intent.action.VIEW'
+        ];
+
+        if (androidScheme !== 'https') {
+          intentParams.push('category=android.intent.category.BROWSABLE');
         }
+
+        intentUrl = 'intent://' + androidHost + '?url=' + encodeURIComponent(CONFIG.target) + '&env=' + CONFIG.environment + 
+                   '#Intent;' + intentParams.join(';') + ';end';
       }
 
       if (intentUrl) {
-        log('Attempting to open Android app with intent: ' + intentUrl);
-        window.location.href = intentUrl;
-        
-        // Android Intent URLs handle fallbacks automatically, but add backup
-        setTimeout(() => {
-          if (!redirected) {
-            log('Android fallback timeout reached');
-            showFallback();
-          }
-        }, CONFIG.timeouts.APP_ATTEMPT);
+        try {
+          log('Attempting to launch Android app with intent: ' + intentUrl);
+          window.location.href = intentUrl;
+        } catch (error) {
+          log('Error launching Android app: ' + error.message);
+          if (cleanupDetection) cleanupDetection();
+          redirectToAppStore();
+          return;
+        }
       } else {
-        log('No intent URL available for Android app');
+        if (cleanupDetection) cleanupDetection();
         showFallback();
       }
-
     } else {
-      log('Non-mobile device, redirecting to browser');
       redirect();
     }
   }
-  
-  function extractYouTubeVideoId(url) {
-    const regExp = /^.*((youtu.be\\/)|(v\\/)|(\\/u\\/\\w\\/)|(embed\\/)|(watch\\?)|(watch\\.+))\\??v?=?([^#\\&\\?]*).*/;
-    const match = url.match(regExp);
-    return (match && match[8] && match[8].length === 11) ? match[8] : null;
-  }
-
-  function convertToWhatsAppScheme(url) {
-    const waMatch = url.match(/wa\\.me\\/(\\d+)(?:\\?text=(.*))?/);
-    if (waMatch) {
-      const phone = waMatch[1];
-      const text = waMatch[2] ? decodeURIComponent(waMatch[2]) : '';
-      return 'whatsapp://send?phone=' + phone + (text ? '&text=' + encodeURIComponent(text) : '');
-    }
-    return 'whatsapp://send';
-  }
-
-  function convertToSpotifyScheme(url) {
-    return url.replace('https://open.spotify.com/', 'spotify:');
-  }
 
   function init() {
-    log('Initializing deep link redirect');
     log('Config: ' + JSON.stringify({
       target: CONFIG.target,
       appName: CONFIG.appName,
@@ -650,47 +659,39 @@ function generateRedirectScript(config: SmartLinkOptions, device: DeviceInfo, co
     }));
 
     if (!CONFIG.target) {
-      log('No target URL provided');
       showFallback();
       return;
     }
 
     if (!CONFIG.device.isMobile) {
-      log('Desktop device detected, redirecting to browser');
       setTimeout(redirect, CONFIG.timeouts.INITIAL_DELAY);
       return;
     }
 
     if (CONFIG.device.isInAppBrowser) {
-      log('In-app browser detected, redirecting to browser');
       setTimeout(redirect, CONFIG.timeouts.INITIAL_DELAY);
       return;
     }
 
-    // Validate required configuration
     if (isIOS && !CONFIG.app.iosAppId) {
-      log('iOS device but no App ID configured, showing fallback');
       showFallback();
       return;
     }
 
-    if (CONFIG.device.isAndroid && !CONFIG.app.androidPackage) {
-      log('Android device but no package name configured, showing fallback');
+    if (isAndroid && !CONFIG.app.androidPackage) {
       showFallback();
       return;
     }
 
-    log('Mobile device detected, attempting app launch');
     setTimeout(tryAppLaunch, CONFIG.timeouts.INITIAL_DELAY);
 
-    // Ultimate fallback safety net
+    // Final fallback - force redirect after maximum time
     setTimeout(() => {
       if (!redirected && !appOpenDetected && !window.closed) {
-        log('Ultimate timeout reached, forcing action');
-        clearFallbackTimer();
-        if (isIOS && CONFIG.app.iosAppId) {
-          redirectToAppStore();
-        } else if (CONFIG.device.isAndroid && CONFIG.app.androidPackage) {
+        clearAllTimers();
+        log('Force redirect timeout reached');
+        
+        if ((isIOS && CONFIG.app.iosAppId) || (isAndroid && CONFIG.app.androidPackage)) {
           redirectToAppStore();
         } else {
           redirect();
@@ -699,7 +700,6 @@ function generateRedirectScript(config: SmartLinkOptions, device: DeviceInfo, co
     }, CONFIG.timeouts.FORCE_REDIRECT);
   }
 
-  // Initialize when DOM is ready
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
   } else {
