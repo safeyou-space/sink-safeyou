@@ -128,7 +128,6 @@ export function useAccessLog(event: H3Event) {
   const countryName = regionNames.of(cf?.country || 'WD') // fallback to "Worldwide"
 
   const accessLogs = {
-    // Original fields
     url: link.url,
     slug: link.slug,
     ua: userAgent,
@@ -146,17 +145,14 @@ export function useAccessLog(event: H3Event) {
     deviceType: uaInfo?.device?.type,
     COLO: cf?.colo,
 
-    // For RealTime Globe
     latitude: Number(cf?.latitude || getHeader(event, 'cf-iplatitude') || 0),
     longitude: Number(cf?.longitude || getHeader(event, 'cf-iplongitude') || 0),
 
-    // Enhanced deep linking fields
     appName: accessLog.appName || 'unknown',
     environment: accessLog.environment || 'production',
     requestHost: accessLog.requestHost,
     linkEnvironment: accessLog.linkEnvironment,
 
-    // Device capabilities for deep linking
     isIOS: accessLog.device?.isIOS || false,
     isAndroid: accessLog.device?.isAndroid || false,
     isMobile: accessLog.device?.isMobile || false,
@@ -166,19 +162,16 @@ export function useAccessLog(event: H3Event) {
     osVersion: accessLog.device?.osVersion || uaInfo?.os?.version,
     deviceModel: accessLog.device?.deviceModel || uaInfo?.device?.model,
 
-    // Deep linking context
     appDetected: accessLog.deepLink?.appDetected,
     redirectType: accessLog.deepLink?.redirectType || 'browser-redirect',
     detectionMethod: accessLog.deepLink?.detectionMethod || 'unknown',
     canLaunchApp: accessLog.deepLink?.canLaunchApp || false,
     processingTime: accessLog.processingTime || 0,
 
-    // App launch capability flags
     supportsUniversalLinks: accessLog.device?.isIOS && !accessLog.device?.isInAppBrowser,
     supportsAppLinks: accessLog.device?.isAndroid && !accessLog.device?.isInAppBrowser,
     supportsCustomSchemes: accessLog.device?.isMobile && !accessLog.device?.isBot,
 
-    // User experience metrics
     redirectStrategy: determineRedirectStrategy(accessLog),
     expectedOutcome: determineExpectedOutcome(accessLog),
   }
@@ -246,14 +239,6 @@ function determineExpectedOutcome(accessLog: any): string {
 
   if (device.isMobile && deepLink.canLaunchApp) {
     switch (accessLog.appName) {
-      case 'youtube':
-        return device.isIOS ? 'youtube-app-launch' : 'youtube-intent-launch'
-      case 'facebook':
-        return device.isIOS ? 'facebook-app-launch' : 'facebook-intent-launch'
-      case 'whatsapp':
-        return device.isIOS ? 'whatsapp-app-launch' : 'whatsapp-intent-launch'
-      case 'spotify':
-        return device.isIOS ? 'spotify-app-launch' : 'spotify-intent-launch'
       case 'safeyou':
         return device.isIOS ? 'safeyou-universal-link' : 'safeyou-intent-launch'
       default:
